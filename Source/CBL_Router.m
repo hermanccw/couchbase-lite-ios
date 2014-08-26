@@ -136,6 +136,18 @@
     return result;
 }
 
+- (NSMutableDictionary*) jsonQueries {
+    NSMutableDictionary* queries = $mdict();
+    [self.queries enumerateKeysAndObjectsUsingBlock: ^(NSString* param, NSString* value, BOOL *stop) {
+        id parsed = [CBLJSON JSONObjectWithData: [value dataUsingEncoding: NSUTF8StringEncoding]
+                                       options: CBLJSONReadingAllowFragments
+                                         error: nil];
+        if (parsed)
+            queries[param] = parsed;
+    }];
+    return queries;
+}
+
 
 - (BOOL) cacheWithEtag: (NSString*)etag {
     NSString* eTag = $sprintf(@"\"%@\"", etag);
@@ -562,23 +574,21 @@ static NSArray* splitPath( NSURL* url ) {
             _response.internalStatus = kCBLStatusNotAcceptable;
         }
     }
-    
-    // When response body is not nil and there is no content-type given,
-    // set default value to 'application/json'.
-    if (_response.body && !_response[@"Content-Type"]) {
+
+    if (_response.body.isValidJSON)
         _response[@"Content-Type"] = @"application/json";
-    }
-    
+
     if (_response.status == 200 && ($equal(_request.HTTPMethod, @"GET") ||
                                     $equal(_request.HTTPMethod, @"HEAD"))) {
         if (!_response[@"Cache-Control"])
             _response[@"Cache-Control"] = @"must-revalidate";
     }
 
-    for (NSString *key in [_server.customHTTPHeaders allKeys]) {
+    for (NSString *key in [_server.customHTTPHeaders allKeys])
+    {
         _response[key] = _server.customHTTPHeaders[key];
     }
-    
+
     if (_onResponseReady)
         _onResponseReady(_response);
 }

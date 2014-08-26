@@ -109,10 +109,6 @@ static NSCharacterSet* kIllegalNameChars;
         _EnableLogTo(type, YES);
 }
 
-+ (void) redirectLogging: (void (^)(NSString* type, NSString* message))callback {
-    MYLoggingCallback = callback;
-}
-
 
 + (NSString*) defaultDirectory {
     NSArray* paths = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory,

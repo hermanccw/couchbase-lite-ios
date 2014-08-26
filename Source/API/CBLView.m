@@ -37,6 +37,7 @@
         _weakDB = db;
         _name = [name copy];
         _viewID = -1;  // means 'unknown'
+        _mapContentOptions = kCBLIncludeLocalSeq;
         _collation = 0;
     }
     return self;
@@ -58,20 +59,6 @@
 }
 
 
-- (NSUInteger) totalDocs {
-    CBLDatabase* db = _weakDB;
-    NSInteger totalDocs = [db.fmdb intForQuery: @"SELECT total_docs FROM views WHERE name=?", _name];
-    if (totalDocs == -1) { // mean unknown
-        totalDocs = [db.fmdb intForQuery: @"SELECT COUNT(view_id) FROM maps WHERE view_id=?",
-                     @(self.viewID)];
-        [db.fmdb executeUpdate: @"UPDATE views SET total_docs=? WHERE view_id=?",
-            @(totalDocs), @(self.viewID)];
-    }
-    assert(totalDocs >= 0);
-    return totalDocs;
-}
-
-
 - (SequenceNumber) lastSequenceIndexed {
     return [_weakDB.fmdb longLongForQuery: @"SELECT lastSequence FROM views WHERE name=?", _name];
 }
@@ -81,7 +68,6 @@
     CBLDatabase* db = _weakDB;
     return [db.shared valueForType: @"map" name: _name inDatabaseNamed: db.name];
 }
-
 
 - (CBLReduceBlock) reduceBlock {
     CBLDatabase* db = _weakDB;
@@ -109,13 +95,12 @@
     // Update the version column in the db. This is a little weird looking because we want to
     // avoid modifying the db if the version didn't change, and because the row might not exist yet.
     CBL_FMDatabase* fmdb = db.fmdb;
-    if (![fmdb executeUpdate: @"INSERT OR IGNORE INTO views (name, version, total_docs) "
-                               "VALUES (?, ?, ?)",
-                              _name, version, @(0)])
+    if (![fmdb executeUpdate: @"INSERT OR IGNORE INTO views (name, version) VALUES (?, ?)", 
+                              _name, version])
         return NO;
     if (fmdb.changes)
         return YES;     // created new view
-    if (![fmdb executeUpdate: @"UPDATE views SET version=?, lastSequence=0, total_docs=0 "
+    if (![fmdb executeUpdate: @"UPDATE views SET version=?, lastSequence=0 "
                                "WHERE name=? AND version!=?", 
                               version, _name, version])
         return NO;
@@ -140,7 +125,7 @@
     CBLStatus status = [db _inTransaction: ^CBLStatus {
         if ([db.fmdb executeUpdate: @"DELETE FROM maps WHERE view_id=?",
                                      @(_viewID)]) {
-            [db.fmdb executeUpdate: @"UPDATE views SET lastsequence=0, total_docs=0 WHERE view_id=?",
+            [db.fmdb executeUpdate: @"UPDATE views SET lastsequence=0 WHERE view_id=?",
                                      @(_viewID)];
         }
         return db.lastDbStatus;

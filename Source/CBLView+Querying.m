@@ -45,15 +45,6 @@ static inline NSString* toJSONString( id object ) {
 }
 
 
-static inline NSData* toJSONData( id object ) {
-    if (!object)
-        return nil;
-    return [CBLJSON dataWithJSONObject: object
-                               options: CBLJSONWritingAllowFragments
-                                 error: NULL];
-}
-
-
 static id fromJSON( NSData* json ) {
     if (!json)
         return nil;
@@ -97,7 +88,7 @@ typedef CBLStatus (^QueryRowBlock)(NSData* keyData, NSData* valueData, NSString*
     if (options->bbox)
         [sql appendString: @", bboxes"];
     [sql appendString: @" WHERE maps.view_id=?"];
-    NSMutableArray* args = $marray(@(self.viewID));
+    NSMutableArray* args = $marray(@(_viewID));
 
     if (options->keys) {
         [sql appendString:@" AND key in ("];
@@ -105,19 +96,19 @@ typedef CBLStatus (^QueryRowBlock)(NSData* keyData, NSData* valueData, NSString*
         for (NSString * key in options->keys) {
             [sql appendString: item];
             item = @",?";
-            [args addObject: toJSONData(key)];
+            [args addObject: toJSONString(key)];
         }
         [sql appendString:@")"];
     }
 
-    NSData* startKey = toJSONData(options->startKey);
-    NSData* endKey = toJSONData(options->endKey);
-    NSData* minKey = startKey, *maxKey = endKey;
+    NSString* startKey = toJSONString(options->startKey);
+    NSString* endKey = toJSONString(options->endKey);
+    NSString* minKey = startKey, *maxKey = endKey;
     NSString* minKeyDocID = options->startKeyDocID;
     NSString* maxKeyDocID = options->endKeyDocID;
     BOOL inclusiveMin = YES, inclusiveMax = options->inclusiveEnd;
     if (options->descending) {
-        NSData* min = minKey;
+        NSString* min = minKey;
         minKey = maxKey;
         maxKey = min;
         inclusiveMin = inclusiveMax;
@@ -176,10 +167,7 @@ typedef CBLStatus (^QueryRowBlock)(NSData* keyData, NSData* valueData, NSString*
     LogTo(View, @"Query %@: %@\n\tArguments: %@", _name, sql, args);
     
     CBLDatabase* db = _weakDB;
-    CBL_FMDatabase* fmdb = db.fmdb;
-    fmdb.bindNSDataAsString = YES;
-    CBL_FMResultSet* r = [fmdb executeQuery: sql withArgumentsInArray: args];
-    fmdb.bindNSDataAsString = NO;
+    CBL_FMResultSet* r = [db.fmdb executeQuery: sql withArgumentsInArray: args];
     if (!r)
         return db.lastDbError;
 
@@ -232,11 +220,6 @@ typedef CBLStatus (^QueryRowBlock)(NSData* keyData, NSData* valueData, NSString*
 }
 
 
-BOOL CBLValueIsEntireDoc(NSData* valueData) {
-    return valueData.length == 1 && *(const char*)valueData.bytes == '*';
-}
-
-
 - (NSArray*) _regularQueryWithOptions: (const CBLQueryOptions*)options
                                status: (CBLStatus*)outStatus
 {
@@ -250,9 +233,7 @@ BOOL CBLValueIsEntireDoc(NSData* valueData) {
         SequenceNumber sequence = [r longLongIntForColumnIndex:3];
         id docContents = nil;
         if (options->includeDocs) {
-            NSDictionary* value = nil;
-            if (valueData && !CBLValueIsEntireDoc(valueData))
-                value = $castIf(NSDictionary, fromJSON(valueData));
+            NSDictionary* value = $castIf(NSDictionary, fromJSON(valueData));
             NSString* linkedID = value.cbl_id;
             if (linkedID) {
                 // Linked document: http://wiki.apache.org/couchdb/Introduction_to_CouchDB_views#Linked_documents
@@ -438,21 +419,8 @@ static id callReduce(CBLReduceBlock reduceBlock, NSMutableArray* keys, NSMutable
         }
         LogTo(ViewVerbose, @"Query %@: Will reduce row with key=%@, value=%@",
               _name, [keyData my_UTF8ToString], [valueData my_UTF8ToString]);
-
-        id valueOrData = valueData;
-        if (valuesToReduce && CBLValueIsEntireDoc(valueData)) {
-            // map fn emitted 'doc' as value, which was stored as a "*" placeholder; expand now:
-            CBLStatus status;
-            CBL_Revision* rev = [_weakDB getDocumentWithID: docID
-                                                  sequence: [r longLongIntForColumnIndex:3]
-                                                    status: &status];
-            if (!rev)
-                Warn(@"%@: Couldn't load doc for row value: status %d", self, status);
-            valueOrData = rev.properties;
-        }
-
         [keysToReduce addObject: keyData];
-        [valuesToReduce addObject: valueOrData ?: $null];
+        [valuesToReduce addObject: valueData ?: $null];
         return kCBLStatusOK;
     }];
 
@@ -482,7 +450,7 @@ static id callReduce(CBLReduceBlock reduceBlock, NSMutableArray* keys, NSMutable
 
     CBL_FMResultSet* r = [_weakDB.fmdb executeQuery: @"SELECT sequence, key, value FROM maps "
                                                       "WHERE view_id=? ORDER BY key",
-                                                     @(self.viewID)];
+                                                     @(_viewID)];
     if (!r)
         return nil;
     NSMutableArray* result = $marray();

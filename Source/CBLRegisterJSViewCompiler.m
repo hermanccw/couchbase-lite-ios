@@ -19,5 +19,4 @@
 
 void CBLRegisterJSViewCompiler(void) {
     [CBLView setCompiler: [[CBLJSViewCompiler alloc] init]];
-    [CBLDatabase setFilterCompiler: [[CBLJSFilterCompiler alloc] init]];
 }

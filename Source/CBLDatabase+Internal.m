@@ -292,7 +292,6 @@ NSString* const CBL_DatabaseWillBeDeletedNotification = @"CBL_DatabaseWillBeDele
                 key TEXT NOT NULL COLLATE JSON, \
                 value TEXT); \
             CREATE INDEX maps_keys on maps(view_id, key COLLATE JSON); \
-            CREATE INDEX maps_sequence on maps(sequence); \
             CREATE TABLE attachments ( \
                 sequence INTEGER NOT NULL REFERENCES revs(sequence) ON DELETE CASCADE, \
                 filename TEXT NOT NULL, \
@@ -301,7 +300,6 @@ NSString* const CBL_DatabaseWillBeDeletedNotification = @"CBL_DatabaseWillBeDele
                 length INTEGER NOT NULL, \
                 revpos INTEGER DEFAULT 0); \
             CREATE INDEX attachments_by_sequence on attachments(sequence, filename); \
-            CREATE INDEX attachments_sequence on attachments(sequence); \
             CREATE TABLE replicators ( \
                 remote TEXT NOT NULL, \
                 push BOOLEAN, \
@@ -408,30 +406,12 @@ NSString* const CBL_DatabaseWillBeDeletedNotification = @"CBL_DatabaseWillBeDele
     }
 
     if (dbVersion < 11) {
-        // Version 11: Add another index
+        // Version 10: Add another index
         NSString* sql = @"CREATE INDEX revs_cur_deleted ON revs(current,deleted); \
                           PRAGMA user_version = 11";
         if (![self initialize: sql error: outError])
             return NO;
         dbVersion = 11;
-    }
-
-    if (dbVersion < 12) {
-        // Version 12: Because of a bug fix that changes JSON collation, invalidate view indexes
-        NSString* sql = @"DELETE FROM maps; UPDATE views SET lastsequence=0; \
-                          PRAGMA user_version = 12";
-        if (![self initialize: sql error: outError])
-            return NO;
-        dbVersion = 12;
-    }
-    
-    if (dbVersion < 13) {
-        // Version 13: Add rows to track number of rows in the views
-        NSString* sql = @"ALTER TABLE views ADD COLUMN total_docs INTEGER DEFAULT -1; \
-                          PRAGMA user_version = 13";
-        if (![self initialize: sql error: outError])
-            return NO;
-        dbVersion = 13;
     }
 
     if (isNew && ![self initialize: @"END TRANSACTION" error: outError])
@@ -866,41 +846,10 @@ NSString* const CBL_DatabaseWillBeDeletedNotification = @"CBL_DatabaseWillBeDele
 
 
 - (CBL_Revision*) getDocumentWithID: (NSString*)docID
-                         revisionID: (NSString*)revID
+                       revisionID: (NSString*)revID
 {
     CBLStatus status;
     return [self getDocumentWithID: docID revisionID: revID options: 0 status: &status];
-}
-
-
-// Note: This method assumes the docID is correct and doesn't bother to look it up on its own.
-- (CBL_Revision*) getDocumentWithID: (NSString*)docID
-                           sequence: (SequenceNumber)sequence
-                             status: (CBLStatus*)outStatus
-{
-    CBL_MutableRevision* result = nil;
-    CBLStatus status;
-    CBL_FMResultSet *r = [_fmdb executeQuery:
-                          @"SELECT revid, deleted, no_attachments, json FROM revs WHERE sequence=?",
-                          @(sequence)];
-    if (!r) {
-        status = self.lastDbError;
-    } else if (![r next]) {
-        status = kCBLStatusNotFound;
-    } else {
-        result = [[CBL_MutableRevision alloc] initWithDocID: docID
-                                                      revID: [r stringForColumnIndex: 0]
-                                                    deleted: [r boolForColumnIndex: 1]];
-        result.sequence = sequence;
-        [self expandStoredJSON: [r dataNoCopyForColumnIndex: 3]
-                  intoRevision: result
-                       options: ([r boolForColumnIndex: 2] ? kCBLNoAttachments : 0)];
-        status = kCBLStatusOK;
-    }
-    [r close];
-    if (outStatus)
-        *outStatus = status;
-    return result;
 }
 
 

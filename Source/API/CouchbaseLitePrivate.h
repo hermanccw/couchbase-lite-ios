@@ -129,7 +129,6 @@
                            key: (id)key
                          value: (id)value
                  docProperties: (NSDictionary*)docProperties;
-@property (readwrite, nonatomic) CBLDatabase* database;
 @property (readonly, nonatomic) NSDictionary* asJSONDictionary;
 @end
 

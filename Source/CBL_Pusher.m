@@ -142,6 +142,15 @@ static int findCommonAncestor(CBL_Revision* rev, NSArray* possibleIDs);
 }
 
 
+- (void) retry {
+    // This is called if I've gone idle but some revisions failed to be pushed.
+    // I should start the _changes feed over again, so I can retry all the revisions.
+    [super retry];
+
+    [self beginReplicating];
+}
+
+
 - (BOOL) goOffline {
     if (![super goOffline])
         return NO;
@@ -426,11 +435,11 @@ CBLStatus CBLStatusFromBulkDocsResponseItem(NSDictionary* item) {
     [self asyncTaskStarted];
 
     NSString* path = $sprintf(@"%@?new_edits=false", CBLEscapeID(rev.docID));
-    __block CBLMultipartUploader* uploader = [[CBLMultipartUploader alloc]
+    CBLMultipartUploader* uploader = [[CBLMultipartUploader alloc]
                                   initWithURL: CBLAppendToURL(_remote, path)
                                      streamer: bodyStream
                                requestHeaders: self.requestHeaders
-                                 onCompletion: ^(CBLMultipartUploader* result, NSError *error) {
+                                 onCompletion: ^(CBLMultipartUploader* uploader, NSError *error) {
                   [self removeRemoteRequest: uploader];
                   if (error) {
                       if ($equal(error.domain, CBLHTTPErrorDomain)

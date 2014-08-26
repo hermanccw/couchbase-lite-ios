@@ -150,11 +150,6 @@ extern const CBLChangesOptions kDefaultCBLChangesOptions;
 - (CBL_Revision*) getDocumentWithID: (NSString*)docID
                        revisionID: (NSString*)revID;
 
-// Loads revision given its sequence. Assumes the given docID is valid.
-- (CBL_Revision*) getDocumentWithID: (NSString*)docID
-                           sequence: (SequenceNumber)sequence
-                             status: (CBLStatus*)outStatus;
-
 - (BOOL) existsDocumentWithID: (NSString*)docID
                    revisionID: (NSString*)revID;
 

@@ -273,12 +273,7 @@ BOOL CBLIsPermanentError( NSError* error ) {
     NSString* domain = error.domain;
     NSInteger code = error.code;
     if ($equal(domain, NSURLErrorDomain)) {
-        return code == NSURLErrorBadURL
-            || code == NSURLErrorUnsupportedURL
-            || code == NSURLErrorUserCancelledAuthentication
-            || code == NSURLErrorUserAuthenticationRequired
-            || (code <= NSURLErrorSecureConnectionFailed &&
-                code >= NSURLErrorClientCertificateRequired);
+        return code == NSURLErrorBadURL || code == NSURLErrorUnsupportedURL;
     } else if ($equal(domain, CBLHTTPErrorDomain)) {
         return code >= 400 && code <= 499;
     } else {

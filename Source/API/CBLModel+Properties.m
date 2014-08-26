@@ -183,23 +183,16 @@ static ValueConverter arrayValueConverter(ValueConverter itemConverter) {
 + (IMP) impForGetterOfProperty: (NSString*)property ofClass: (Class)propertyClass {
     id (^impBlock)(CBLModel*) = nil;
     
-    if (propertyClass == Nil) {
-        // Untyped
+    if (propertyClass == Nil || propertyClass == [NSString class]
+             || propertyClass == [NSNumber class]
+             || propertyClass == [NSDictionary class]) {
+        // Basic classes (including 'id')
         return [super impForGetterOfProperty: property ofClass: propertyClass];
-    } else if (propertyClass == [NSString class]
-               || propertyClass == [NSNumber class]
-               || propertyClass == [NSDictionary class]) {
-        // String, number, dictionary: do some type-checking:
-        impBlock = ^id(CBLModel* receiver) {
-            return [receiver getValueOfProperty: property ofClass: propertyClass];
-        };
     } else if (propertyClass == [NSArray class]) {
         Class itemClass = [self itemClassForArrayProperty: property];
         if (itemClass == nil) {
             // Untyped array:
-            impBlock = ^id(CBLModel* receiver) {
-                return [receiver getValueOfProperty: property ofClass: propertyClass];
-            };
+            return [super impForGetterOfProperty: property ofClass: propertyClass];
         } else if ([itemClass isSubclassOfClass: [CBLModel class]]) {
             // Array of models (a to-many relation):
             impBlock = ^id(CBLModel* receiver) {
@@ -259,16 +252,6 @@ static ValueConverter arrayValueConverter(ValueConverter itemConverter) {
                 [receiver setValue: value ofProperty: property];
             };
         }
-    } else if ([propertyClass conformsToProtocol: @protocol(CBLJSONEncoding)]) {
-        impBlock = ^(CBLModel* receiver, id<CBLJSONEncoding> value) {
-            if ([value respondsToSelector: @selector(setOnMutate:)]) {
-                __weak CBLModel* weakSelf = receiver;
-                [value setOnMutate: ^{
-                    [weakSelf markPropertyNeedsSave: property];
-                }];
-            }
-            [receiver setValue: value ofProperty: property];
-        };
     } else {
         return [super impForSetterOfProperty: property ofClass: propertyClass];
     }

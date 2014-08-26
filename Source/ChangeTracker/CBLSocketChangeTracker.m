@@ -94,11 +94,8 @@
         // Disable TLS 1.2 support because it breaks compatibility with some SSL servers;
         // workaround taken from Apple technote TN2287:
         // http://developer.apple.com/library/ios/#technotes/tn2287/
-        // Disable automatic cert-chain checking, because that's the only way to allow self-signed
-        // certs. We will check the cert later in -checkSSLCert.
-        NSDictionary *settings = $dict(
-                            {(id)kCFStreamSSLLevel, @"kCFStreamSocketSecurityLevelTLSv1_0SSLv3"},
-                            {(id)kCFStreamSSLValidatesCertificateChain, @NO});
+        NSDictionary *settings = $dict({(id)kCFStreamSSLLevel,
+                                        @"kCFStreamSocketSecurityLevelTLSv1_0SSLv3"});
         CFReadStreamSetProperty(cfInputStream,
                                 kCFStreamPropertySSLSettings, (CFTypeRef)settings);
     }
@@ -148,9 +145,9 @@
         CFRelease(sslTrust);
         if (!trusted) {
             //TODO: This error could be made more precise
-            [self failedWithError: [NSError errorWithDomain: NSURLErrorDomain
-                                                       code: NSURLErrorServerCertificateUntrusted
-                                                   userInfo: nil]];
+            self.error = [NSError errorWithDomain: NSURLErrorDomain
+                                             code: NSURLErrorServerCertificateUntrusted
+                                         userInfo: nil];
             return NO;
         }
     }
@@ -251,6 +248,13 @@
 
 
 - (void) failedWithError:(NSError*) error {
+    // Map lower-level errors from CFStream to higher-level NSURLError ones:
+    if ($equal(error.domain, NSPOSIXErrorDomain)) {
+        if (error.code == ECONNREFUSED)
+            error = [NSError errorWithDomain: NSURLErrorDomain
+                                        code: NSURLErrorCannotConnectToHost
+                                    userInfo: error.userInfo];
+    }
     [self clearConnection];
     [super failedWithError: error];
 }
